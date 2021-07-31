@@ -2,6 +2,8 @@ import os
 import re
 import subprocess
 
+from getpass import getpass
+
 import dotbot
 
 
@@ -44,7 +46,7 @@ class Brew(dotbot.Plugin):
             if not self._does_brewfile_exist(data):
                 raise ValueError('Bundle file does not exist.')
 
-            self._handle_tap(data)
+            self._handle_brew_install(data)
             self._handle_install(data)
         except ValueError as e:
             self._log.error(e)
@@ -135,23 +137,6 @@ class Brew(dotbot.Plugin):
 
         return stdout, stderr
 
-    def _handle_tap(self, data):
-        stdout, stderr = self._get_options(data)
-
-        with open(os.devnull, 'w') as devnull:
-            result = subprocess.call(
-                self._tap_command,
-                shell=True,
-                stdin=devnull,
-                stdout=True if stdout else devnull,
-                stderr=True if stderr else devnull,
-                cwd=self.cwd,
-                executable=os.environ.get('SHELL'),
-            )
-
-            if result != 0:
-                raise ValueError('Failed to tap homebrew/bundle.')
-
     def _handle_install(self, data):
         environs = self._build_environs(data)
         full_command = self._build_command(self._install_command, data)
@@ -171,3 +156,21 @@ class Brew(dotbot.Plugin):
 
             if result != 0:
                 raise ValueError('Failed to install a bundle.')
+
+    def _handle_brew_install(self, data):
+        stdout, stderr = self._get_options(data)
+
+        with open(os.devnull, 'w') as devnull:
+            result = subprocess.run(
+                ['command -v brew || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"'],
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=True if stderr else devnull,
+                input=getpass("Password: "),
+                encoding="ascii",
+                cwd=self.cwd,
+                executable=os.environ.get('SHELL'),
+            )
+
+            if result.returncode != 0:
+                raise ValueError('Failed to install brew.')
